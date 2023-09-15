@@ -88,7 +88,6 @@ async fn main() {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
                 let sched = JobScheduler::new().await?;
-                // let ctx_clone = Arc::clone(&shared_ctx); // Clone the Arc for use inside the closure
 
                 let news_update_job =
                     Job::new_repeated_async(Duration::from_secs(60), move |_uuid, _| {
@@ -100,7 +99,7 @@ async fn main() {
                             let res = reqwest::get(news_url).await;
 
                             if res.is_err() {
-                                println!("Error getting news: {}", res.err().unwrap());
+                                println!("Error getting news");
                                 return;
                             }
 
@@ -109,7 +108,7 @@ async fn main() {
                             let content = res.bytes().await;
 
                             if content.is_err() {
-                                println!("Error getting news: {}", content.err().unwrap());
+                                println!("Error getting news");
                                 return;
                             }
 
@@ -139,10 +138,7 @@ async fn main() {
                                 .await;
 
                             if prev_news.is_err() {
-                                println!(
-                                    "Error getting previous news: {}",
-                                    prev_news.err().unwrap()
-                                );
+                                println!("Error getting previous news");
                                 return;
                             }
 
