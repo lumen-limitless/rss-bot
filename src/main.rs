@@ -94,9 +94,9 @@ async fn main() {
                         let ctx = Arc::clone(&shared_ctx);
 
                         Box::pin(async move {
-                            let news_url = var("NEWS_URL").expect("Missing NEWS_URL env var");
+                            let rss_url = var("RSS_URL").expect("Missing RSS_URL env var");
 
-                            let res = reqwest::get(news_url).await;
+                            let res = reqwest::get(rss_url).await;
 
                             if res.is_err() {
                                 println!("Error getting news");
@@ -138,7 +138,7 @@ async fn main() {
                                 .await;
 
                             if prev_news.is_err() {
-                                println!("Error getting previous news");
+                                println!("Error getting previous message");
                                 return;
                             }
 
@@ -146,14 +146,14 @@ async fn main() {
 
                             if let Some(m) = prev_news.first() {
                                 if m.content == story_link {
-                                    println!("No new news");
+                                    println!("No new articles");
                                     return;
                                 }
                             }
 
                             match channel_id.say(ctx, story_link).await {
-                                Ok(_) => println!("Posted news"),
-                                Err(e) => println!("Error posting news: {}", e),
+                                Ok(_) => println!("Posted new article"),
+                                Err(e) => println!("Error posting article: {}", e),
                             };
                         })
                     })
