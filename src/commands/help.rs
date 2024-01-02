@@ -12,7 +12,7 @@ pub async fn help(
         ctx,
         command.as_deref(),
         poise::builtins::HelpConfiguration {
-            extra_text_at_bottom: "This discord bot fetches the latest news from NEWS_URL env var and sends a message with the link to the channel with id CHANNEL_ID at specified intervals.",
+            extra_text_at_bottom: "This discord bot fetches the latest article from RSS_URL env var and sends a message with the link to the channel with id CHANNEL_ID at specified intervals.",
             ..Default::default()
         },
     )
