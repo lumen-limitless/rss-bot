@@ -1,0 +1,41 @@
+name: Rust CI/CD
+
+# run workflow when the condition is met
+on:
+  # run when code is pushed on the `main` branch
+  push:
+    branches: ['main', 'master']
+  # run when a pull request to the `main` branch
+  pull_request:
+    branches: ['main', 'master']
+
+# env variables
+env:
+  CARGO_TERM_COLOR: always
+
+# jobs
+jobs:
+  # job name
+  build:
+    # os to run the job on support macOS and windows also
+    runs-on: ubuntu-latest
+    # steps for job
+    steps:
+      # this will get the code and set the git
+      - uses: actions/checkout@v3
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Lint with Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # run the build
+      - name: Build
+        # using cargo to build
+        run: cargo build --release
+
+      # run the tests
+      - name: Test
+        # using cargo to test
+        run: cargo test --release

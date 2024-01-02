@@ -47,24 +47,24 @@ async fn main() {
             ],
             ..Default::default()
         },
-        /// The global error handler for all error cases that may occur
+        // The global error handler for all error cases that may occur
         on_error: |error| Box::pin(on_error(error)),
-        /// This code is run before every command
+        // This code is run before every command
         pre_command: |ctx| {
             Box::pin(async move {
                 println!("Executing command {}...", ctx.command().qualified_name);
             })
         },
-        /// This code is run after a command if it was successful (returned Ok)
+        // This code is run after a command if it was successful (returned Ok)
         post_command: |ctx| {
             Box::pin(async move {
                 println!("Executed command {}!", ctx.command().qualified_name);
             })
         },
-        /// Every command invocation must pass this check to continue execution
+        // Every command invocation must pass this check to continue execution
         command_check: Some(|_ctx| Box::pin(async move { Ok(true) })),
-        /// Enforce command checks even for owners (enforced by default)
-        /// Set to true to bypass checks, which is useful for testing
+        // Enforce command checks even for owners (enforced by default)
+        // Set to true to bypass checks, which is useful for testing
         skip_checks_for_owners: false,
         event_handler: |_ctx, event, _framework, _data| {
             Box::pin(async move {
@@ -96,35 +96,39 @@ async fn main() {
                         Box::pin(async move {
                             let rss_url = var("RSS_URL").expect("Missing RSS_URL env var");
 
-                            let res = reqwest::get(rss_url).await;
+                            let res = match reqwest::get(rss_url).await {
+                                Ok(r) => r,
+                                Err(e) => {
+                                    println!("Error getting news: {}", e);
+                                    return;
+                                }
+                            };
 
-                            if res.is_err() {
-                                println!("Error getting news");
-                                return;
-                            }
+                            let content = match res.bytes().await {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    println!("Error getting news: {}", e);
+                                    return;
+                                }
+                            };
 
-                            let res = res.unwrap();
-
-                            let content = res.bytes().await;
-
-                            if content.is_err() {
-                                println!("Error getting news");
-                                return;
-                            }
-
-                            let content = content.unwrap();
-
-                            let content_channel =
-                                Channel::read_from(&content[..]).expect("Failed to parse RSS");
+                            let content_channel = match Channel::read_from(&content[..]) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    println!("Error getting news: {}", e);
+                                    return;
+                                }
+                            };
 
                             let story = content_channel.items[0].clone();
 
-                            if story.link.is_none() {
-                                println!("No link found");
-                                return;
-                            }
-
-                            let story_link = story.link.unwrap();
+                            let story_link = match story.link {
+                                Some(l) => l,
+                                None => {
+                                    println!("No link found");
+                                    return;
+                                }
+                            };
 
                             let channel_id = serenity::ChannelId(
                                 var("CHANNEL_ID")
