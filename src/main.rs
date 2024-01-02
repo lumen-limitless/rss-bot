@@ -137,16 +137,16 @@ async fn main() {
                                     .expect("Failed to parse CHANNEL_ID env var"),
                             );
 
-                            let prev_news = channel_id
+                            let prev_news = match channel_id
                                 .messages(&ctx, |retriever| retriever.limit(1))
-                                .await;
-
-                            if prev_news.is_err() {
-                                println!("Error getting previous message");
-                                return;
-                            }
-
-                            let prev_news = prev_news.unwrap();
+                                .await
+                            {
+                                Ok(m) => m,
+                                Err(e) => {
+                                    println!("Error getting previous message: {}", e);
+                                    return;
+                                }
+                            };
 
                             if let Some(m) = prev_news.first() {
                                 if m.content == story_link {
