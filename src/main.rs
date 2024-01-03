@@ -80,11 +80,11 @@ async fn main() {
             var("DISCORD_TOKEN")
                 .expect("Missing `DISCORD_TOKEN` env var, see README for more information."),
         )
-        .setup(move |ctx, _ready, framework| {
+        .setup(move |ctx, ready, framework| {
             Box::pin(async move {
                 let shared_ctx = Arc::new(ctx.clone());
 
-                println!("Logged in as {}", _ready.user.name);
+                println!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
                 let sched = JobScheduler::new().await?;
