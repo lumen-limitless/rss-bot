@@ -16,14 +16,14 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: discord-bot
-            asset_name: discord-bot-linux-amd64
+            artifact_name: rss-bot
+            asset_name: rss-bot-linux-amd64
           - os: windows-latest
-            artifact_name: discord-bot.exe
-            asset_name: discord-bot-windows-amd64.exe
+            artifact_name: rss-bot.exe
+            asset_name: rss-bot-windows-amd64.exe
           - os: macos-latest
-            artifact_name: discord-bot
-            asset_name: discord-bot-macos-amd64
+            artifact_name: rss-bot
+            asset_name: rss-bot-macos-amd64
 
     steps:
       - uses: actions/checkout@v3
