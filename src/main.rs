@@ -3,7 +3,7 @@
 mod commands;
 
 use ::rss::Channel;
-use poise::serenity_prelude::{self as serenity};
+use poise::serenity_prelude::{self as serenity, ChannelId, GetMessages};
 use std::{env::var, sync::Arc, time::Duration};
 use tokio_cron_scheduler::{Job, JobScheduler};
 // Types used by all command functions
@@ -19,7 +19,7 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     // and forward the rest to the default handler
     match error {
         poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
-        poise::FrameworkError::Command { error, ctx } => {
+        poise::FrameworkError::Command { error, ctx, .. } => {
             println!("Error in command `{}`: {:?}", ctx.command().name, error,);
         }
         error => {
@@ -31,16 +31,25 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 }
 
 #[tokio::main]
-async fn main() {
-    env_logger::init();
+async fn main() -> eyre::Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+
+    let channel_id = std::env::var("CHANNEL_ID").expect("missing CHANNEL_ID");
+
+    let rss_url = var("RSS_URL").expect("Missing RSS_URL env var");
+
+    let intents =
+        serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
     // FrameworkOptions contains all of poise's configuration option in one struct
     // Every option can be omitted to use its default value
     let options = poise::FrameworkOptions {
         commands: vec![commands::help::help()],
+
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("~".into()),
-            edit_tracker: Some(poise::EditTracker::for_timespan(Duration::from_secs(3600))),
             additional_prefixes: vec![
                 poise::Prefix::Literal("hey bot"),
                 poise::Prefix::Literal("hey bot,"),
@@ -52,13 +61,13 @@ async fn main() {
         // This code is run before every command
         pre_command: |ctx| {
             Box::pin(async move {
-                println!("Executing command {}...", ctx.command().qualified_name);
+                tracing::info!("Executing command {}...", ctx.command().qualified_name);
             })
         },
         // This code is run after a command if it was successful (returned Ok)
         post_command: |ctx| {
             Box::pin(async move {
-                println!("Executed command {}!", ctx.command().qualified_name);
+                tracing::info!("Executed command {}!", ctx.command().qualified_name);
             })
         },
         // Every command invocation must pass this check to continue execution
@@ -68,100 +77,48 @@ async fn main() {
         skip_checks_for_owners: false,
         event_handler: |_ctx, event, _framework, _data| {
             Box::pin(async move {
-                println!("Got an event in event handler: {:?}", event.name());
+                tracing::info!(
+                    "Got an event in event handler: {:?}",
+                    event.snake_case_name()
+                );
                 Ok(())
             })
         },
         ..Default::default()
     };
 
-    poise::Framework::builder()
-        .token(
-            var("DISCORD_TOKEN")
-                .expect("Missing `DISCORD_TOKEN` env var, see README for more information."),
-        )
-        .setup(move |ctx, ready, framework| {
+    let framework = poise::Framework::builder()
+        .options(options)
+        .setup(|ctx, ready, framework| {
             Box::pin(async move {
                 let shared_ctx = Arc::new(ctx.clone());
 
-                println!("Logged in as {}", ready.user.name);
+                tracing::info!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
                 let sched = JobScheduler::new().await?;
 
-                let news_update_job =
-                    Job::new_repeated_async(Duration::from_secs(60), move |_uuid, _| {
-                        let ctx = Arc::clone(&shared_ctx);
+                let rss_url = Arc::new(rss_url);
+                let channel_id = Arc::new(channel_id);
+
+                let news_update_job = Job::new_repeated_async(Duration::from_secs(60), {
+                    let shared_ctx = shared_ctx.clone();
+                    let rss_url = rss_url.clone();
+                    let channel_id = channel_id.clone();
+
+                    move |_uuid, _| {
+                        let ctx = shared_ctx.clone();
+                        let rss_url = rss_url.clone();
+                        let channel_id = channel_id.clone();
 
                         Box::pin(async move {
-                            let rss_url = var("RSS_URL").expect("Missing RSS_URL env var");
-
-                            let res = match reqwest::get(rss_url).await {
-                                Ok(r) => r,
-                                Err(e) => {
-                                    println!("Error getting news: {}", e);
-                                    return;
-                                }
-                            };
-
-                            let content = match res.bytes().await {
-                                Ok(c) => c,
-                                Err(e) => {
-                                    println!("Error getting news: {}", e);
-                                    return;
-                                }
-                            };
-
-                            let content_channel = match Channel::read_from(&content[..]) {
-                                Ok(c) => c,
-                                Err(e) => {
-                                    println!("Error getting news: {}", e);
-                                    return;
-                                }
-                            };
-
-                            let story = content_channel.items[0].clone();
-
-                            let story_link = match story.link {
-                                Some(l) => l,
-                                None => {
-                                    println!("No link found");
-                                    return;
-                                }
-                            };
-
-                            let channel_id = serenity::ChannelId(
-                                var("CHANNEL_ID")
-                                    .expect("Missing CHANNEL_ID env var")
-                                    .parse::<u64>()
-                                    .expect("Failed to parse CHANNEL_ID env var"),
-                            );
-
-                            let prev_news = match channel_id
-                                .messages(&ctx, |retriever| retriever.limit(1))
-                                .await
-                            {
-                                Ok(m) => m,
-                                Err(e) => {
-                                    println!("Error getting previous message: {}", e);
-                                    return;
-                                }
-                            };
-
-                            if let Some(m) = prev_news.first() {
-                                if m.content == story_link {
-                                    println!("No new articles");
-                                    return;
-                                }
+                            if let Err(e) = fetch_and_post_news(&ctx, &rss_url, &channel_id).await {
+                                tracing::error!("Error in news update job: {}", e);
                             }
-
-                            match channel_id.say(ctx, story_link).await {
-                                Ok(_) => println!("Posted new article"),
-                                Err(e) => println!("Error posting article: {}", e),
-                            };
                         })
-                    })
-                    .unwrap();
+                    }
+                })
+                .unwrap();
 
                 sched.add(news_update_job).await?;
 
@@ -170,15 +127,48 @@ async fn main() {
                 Ok(Data {})
             })
         })
-        .options(options)
-        .intents(
-            serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT,
-        )
-        .run()
-        .await
-        .map_err(|e| {
-            println!("Failed to start bot: {}", e);
-            e
-        })
-        .unwrap();
+        .build();
+
+    let mut client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await?;
+
+    tracing::info!("Starting bot...");
+    client.start().await?;
+
+    Ok(())
+}
+
+async fn fetch_and_post_news(
+    ctx: &Arc<serenity::Context>,
+    rss_url: &str,
+    channel_id: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let res = reqwest::get(rss_url).await?;
+    let content = res.bytes().await?;
+    let content_channel = Channel::read_from(&content[..])?;
+
+    let story = content_channel.items.first().ok_or("No items in feed")?;
+    let story_link = story.link.as_ref().ok_or("No link found")?;
+
+    let channel_id = ChannelId::from(channel_id.parse::<u64>()?);
+    let channel = channel_id
+        .to_channel(&ctx)
+        .await?
+        .guild()
+        .ok_or("Not a guild channel")?;
+
+    let prev_news = channel.messages(&ctx, GetMessages::default()).await?;
+
+    if let Some(m) = prev_news.first() {
+        if m.content == *story_link {
+            tracing::info!("No new articles");
+            return Ok(());
+        }
+    }
+
+    channel_id.say(ctx, story_link).await?;
+    tracing::info!("Posted new article");
+
+    Ok(())
 }
