@@ -19,7 +19,8 @@ jobs:
             artifact_name: rss-bot
             asset_name: rss-bot-linux-amd64
 
-          - os: windows-latest
+          - os: ubuntu-latest
+            target: x86_64-pc-windows-gnu
             artifact_name: rss-bot.exe
             asset_name: rss-bot-windows-amd64.exe
 
@@ -43,7 +44,7 @@ jobs:
 
       - name: Build
         run: |
-          if [ "${{ matrix.target }}" == "arm-unknown-linux-gnueabihf" ]; then
+          if ([[ "${{ matrix.target }}" ]]); then
             cross build --release --target=${{ matrix.target }}
           else
             cargo build --release
@@ -51,7 +52,7 @@ jobs:
 
       - name: Generate checksum
         run: |
-          if [ "${{ matrix.target }}" ]; then
+          if ([[ "${{ matrix.target }}" ]]); then
             cd target/${{ matrix.target }}/release
           else
             cd target/release
