@@ -22,7 +22,7 @@ jobs:
     # steps for job
     steps:
       # this will get the code and set the git
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Check formatting
         run: cargo fmt -- --check
