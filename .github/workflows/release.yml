@@ -10,46 +10,40 @@ env:
 
 jobs:
   release:
-    name: Release for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Release for ${{ matrix.target }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - target: x86_64-unknown-linux-gnu
             artifact_name: rss-bot
             asset_name: rss-bot-linux-amd64
-          - os: windows-latest
+          - target: x86_64-pc-windows-msvc
             artifact_name: rss-bot.exe
             asset_name: rss-bot-windows-amd64.exe
-          - os: macos-latest
+          - target: x86_64-apple-darwin
             artifact_name: rss-bot
             asset_name: rss-bot-macos-amd64
-          - os: ubuntu-latest
+          - target: arm-unknown-linux-gnueabihf
             artifact_name: rss-bot
             asset_name: rss-bot-raspbian-arm
-            target: arm-unknown-linux-gnueabihf
+          - target: aarch64-apple-darwin
+            artifact_name: rss-bot
+            asset_name: rss-bot-macos-arm64
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install cross-compilation tools
-        if: matrix.target == 'arm-unknown-linux-gnueabihf'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf
+      - name: Install cross
+        run: cargo install cross
 
       - name: Build
-        run: |
-          if [ "${{ matrix.target }}" == "arm-unknown-linux-gnueabihf" ]; then
-            cargo build --release --target=${{ matrix.target }}
-          else
-            cargo build --release
-          fi
+        run: cross build --release --target ${{ matrix.target }}
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.ACCESS_TOKEN }}
-          file: target/${{ matrix.target || 'release' }}/${{ matrix.artifact_name }}
+          file: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
           asset_name: ${{ matrix.asset_name }}
           tag: ${{ github.ref }}
