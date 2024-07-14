@@ -22,12 +22,17 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-pc-windows-gnu
             artifact_name: rss-bot.exe
-            asset_name: rss-bot-windows-amd64.exe
+            asset_name: rss-bot-windows-x86_64.exe
 
           - os: ubuntu-latest
             artifact_name: rss-bot
-            asset_name: rss-bot-raspbian-arm
+            asset_name: rss-bot-linux-gnueabihf
             target: arm-unknown-linux-gnueabihf
+
+          - os: ubuntu-latest
+            artifact_name: rss-bot
+            asset_name: rss-bot-linux-musleabihf
+            target: arm-unknown-linux-musleabihf
 
     steps:
       - uses: actions/checkout@v4
