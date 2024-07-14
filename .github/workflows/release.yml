@@ -24,17 +24,32 @@ jobs:
           - os: macos-latest
             artifact_name: rss-bot
             asset_name: rss-bot-macos-amd64
+          - os: ubuntu-latest
+            artifact_name: rss-bot
+            asset_name: rss-bot-raspbian-arm
+            target: arm-unknown-linux-gnueabihf
 
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install cross-compilation tools
+        if: matrix.target == 'arm-unknown-linux-gnueabihf'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf
+
       - name: Build
-        run: cargo build --release
+        run: |
+          if [ "${{ matrix.target }}" == "arm-unknown-linux-gnueabihf" ]; then
+            cargo build --release --target=${{ matrix.target }}
+          else
+            cargo build --release
+          fi
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.ACCESS_TOKEN }}
-          file: target/release/${{ matrix.artifact_name }}
+          file: target/${{ matrix.target || 'release' }}/${{ matrix.artifact_name }}
           asset_name: ${{ matrix.asset_name }}
           tag: ${{ github.ref }}
